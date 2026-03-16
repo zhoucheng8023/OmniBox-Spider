@@ -2,7 +2,7 @@
 // @author 
 // @description 刮削：支持，弹幕：支持，嗅探：支持
 // @dependencies: axios, crypto-js
-// @version 1.0.1
+// @version 1.0.2
 // @downloadURL https://gh-proxy.org/https://github.com/Silent1566/OmniBox-Spider/raw/refs/heads/main/影视/采集/修罗影视.js
 
 /**
@@ -458,6 +458,32 @@ const matchDanmu = async (fileName) => {
 
 async function home(params) {
     logInfo("🏠 进入首页");
+    let list = [];
+
+    try {
+        const html = await request(HOST);
+        if (!html) {
+            logInfo("⚠ 首页HTML为空");
+        } else {
+            const $ = cheerio.load(html);
+            $(".row-cards .card.card-link").each((_, el) => {
+                const href = $(el).find("a").attr("href");
+                if (href) {
+                    list.push({
+                        vod_id: getId(href),
+                        vod_name: $(el).find(".card-title").text().trim(),
+                        vod_pic: fixImg($(el).find("img").attr("data-src")),
+                        vod_remarks: $(el).find(".text-muted").text().trim()
+                    });
+                }
+            });
+            logInfo(`✅ 首页解析到 ${list.length} 条数据`);
+        }
+    } catch (e) {
+        logError("首页解析异常", e);
+        list = [];
+    }
+
     return {
         class: [
             { type_id: "movie", type_name: "电影" },
@@ -466,7 +492,7 @@ async function home(params) {
             { type_id: "duanju", type_name: "短剧" }
         ],
         filters: filters,
-        list: []
+        list
     };
 }
 
