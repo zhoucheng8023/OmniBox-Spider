@@ -2,7 +2,7 @@
 // @author Monica
 // @description 刮削：支持，弹幕：支持，嗅探：支持
 // @dependencies: cheerio, crypto-js
-// @version 1.0.0
+// @version 1.0.1
 // @downloadURL https://gh-proxy.org/https://github.com/Silent1566/OmniBox-Spider/raw/refs/heads/main/影视/采集/新韩剧网.js
 
 const OmniBox = require("omnibox_sdk");
@@ -145,16 +145,16 @@ const getCleanText = (el) => {
 
 async function home(params) {
     try {
-        const $ = await fetchHtml(`${hanjuConfig.host}/new.html`);
+        const $ = await fetchHtml(`${hanjuConfig.host}`);
         const list = [];
-        $("div.txt ul li, div.list_txt ul li").slice(0, 20).each((_, el) => {
+        $("div.list ul li").slice(0, 100).each((_, el) => {
             const a = $(el).find("a");
             const href = a.attr("href");
             if (href) {
                 list.push({
                     vod_id: href,
                     vod_name: getCleanText(a) || a.attr("title"),
-                    vod_pic: DEFAULT_PIC,
+                    vod_pic: a.attr("data-original"),
                     vod_remarks: $(el).find("span").first().text() || ""
                 });
             }
@@ -192,7 +192,7 @@ async function category(params) {
                     list.push({
                         vod_id: href,
                         vod_name: getCleanText(a) || a.attr("title"),
-                        vod_pic: DEFAULT_PIC,
+                        vod_pic: `https://pics.hanju7.com/pics/${href.replace('/detail/', '').replace('.html', '.jpg')}`,
                         vod_remarks: $(el).find("span").first().text() || ""
                     });
                 }
@@ -212,7 +212,7 @@ async function category(params) {
                 list.push({
                     vod_id: a.attr("href"),
                     vod_name: a.attr("title"),
-                    vod_pic: pic || DEFAULT_PIC,
+                    vod_pic: pic || `https://pics.hanju7.com/pics/${a.attr("href").replace('/detail/', '').replace('.html', '.jpg')}`,
                     vod_remarks: $(el).find("span.tip").text()
                 });
             });
