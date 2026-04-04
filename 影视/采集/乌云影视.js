@@ -1,6 +1,9 @@
 // @name 乌云影视
-// @version 1.0.0
+// @author 
+// @description 刮削：未接入，弹幕：站内弹幕接口，嗅探：不需要
 // @dependencies
+// @version 1.0.1
+// @downloadURL https://gh-proxy.org/https://github.com/Silent1566/OmniBox-Spider/raw/refs/heads/main/影视/采集/乌云影视.js
 
 const OmniBox = require("omnibox_sdk");
 const runner = require("spider_runner");
