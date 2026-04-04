@@ -1,5 +1,5 @@
 // @name 乌云影视
-// @author 
+// @author 梦
 // @description 刮削：未接入，弹幕：站内弹幕接口，嗅探：不需要
 // @dependencies
 // @version 1.0.1
