@@ -2,7 +2,7 @@
 // @author 梦
 // @description 刮削：已接入，弹幕：未接入，嗅探：直接返回 play.modujx11.com 直链
 // @dependencies cheerio
-// @version 1.0.6
+// @version 1.0.7
 // @downloadURL https://gh-proxy.org/https://github.com/Silent1566/OmniBox-Spider/raw/refs/heads/openclaw/影视/采集/威尔伯TV.js
 
 const OmniBox = require("omnibox_sdk");
@@ -10,6 +10,7 @@ const runner = require("spider_runner");
 const cheerio = require("cheerio");
 
 const HOST = "https://wei2bo.com";
+const API_BASE = "https://api.wei2bo.com/api/v1";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 const HEADERS = {
   "User-Agent": UA,
@@ -19,10 +20,10 @@ const HEADERS = {
 };
 
 const CATEGORY_MAP = [
-  { type_id: "movie", type_name: "电影" },
-  { type_id: "tv", type_name: "电视剧" },
-  { type_id: "anime", type_name: "动漫" },
-  { type_id: "variety", type_name: "综艺" },
+  { type_id: "movie", type_name: "电影", pid: 1 },
+  { type_id: "tv", type_name: "电视剧", pid: 2 },
+  { type_id: "anime", type_name: "动漫", pid: 3 },
+  { type_id: "variety", type_name: "综艺", pid: 4 },
 ];
 
 const HOME_SECTION_MARKERS = {
@@ -134,16 +135,14 @@ const FILTERS = {
   ],
 };
 
-function buildFilters() {
-  const result = {};
-  for (const item of CATEGORY_MAP) {
-    result[item.type_id] = FILTERS[item.type_id] || [];
-  }
-  return result;
-}
-
 module.exports = { home, category, detail, search, play };
 runner.run(module.exports);
+
+function buildFilters() {
+  const result = {};
+  for (const item of CATEGORY_MAP) result[item.type_id] = FILTERS[item.type_id] || [];
+  return result;
+}
 
 function log(level, message, data) {
   const suffix = typeof data === "undefined" ? "" : ` | ${JSON.stringify(data)}`;
@@ -192,6 +191,58 @@ function fetchText(url, options = {}) {
   });
 }
 
+function fetchJson(url, options = {}) {
+  return OmniBox.request(url, {
+    method: options.method || "GET",
+    headers: {
+      "User-Agent": UA,
+      Accept: "application/json, text/plain, */*",
+      Referer: `${HOST}/`,
+      Origin: HOST,
+      ...(options.headers || {}),
+    },
+    timeout: options.timeout || 20000,
+    body: options.body,
+  }).then((res) => {
+    if (!res || Number(res.statusCode) < 200 || Number(res.statusCode) >= 400) {
+      throw new Error(`HTTP ${res?.statusCode || "unknown"} @ ${url}`);
+    }
+    return JSON.parse(String(res.body || "{}"));
+  });
+}
+
+function encodeVodId(typeId, vodId) {
+  return `${typeId}:${vodId}`;
+}
+
+function decodeVodId(rawId = "") {
+  const value = String(rawId || "").trim();
+  if (!value.includes(":")) return { typeId: "", vodId: value };
+  const [typeId, vodId] = value.split(":", 2);
+  return { typeId: typeId || "", vodId: vodId || "" };
+}
+
+function pickCategory(typeId) {
+  return CATEGORY_MAP.find((item) => item.type_id === typeId) || CATEGORY_MAP[0];
+}
+
+function pidToTypeId(pid) {
+  return CATEGORY_MAP.find((item) => Number(item.pid) === Number(pid))?.type_id || "movie";
+}
+
+function mapVodItem(item, fallbackTypeId = "movie") {
+  const typeId = item?.type?.pid ? pidToTypeId(item.type.pid) : fallbackTypeId;
+  const vodId = String(item?.id || "").trim();
+  return {
+    vod_id: encodeVodId(typeId, vodId),
+    vod_name: clean(item?.vodName || ""),
+    vod_pic: absUrl(item?.vodPic || ""),
+    vod_remarks: clean(item?.vodRemarks || ""),
+    vod_url: `${HOST}/video/${typeId}/${vodId}`,
+    vod_content: "",
+  };
+}
+
 function extractCarouselList(html) {
   const text = decodeRsc(html);
   const list = [];
@@ -203,7 +254,7 @@ function extractCarouselList(html) {
     if (!vodId || seen.has(vodId)) continue;
     seen.add(vodId);
     list.push({
-      vod_id: vodId,
+      vod_id: encodeVodId("movie", vodId),
       vod_name: clean(match[3]),
       vod_pic: absUrl(match[4]),
       vod_remarks: clean(match[5]),
@@ -213,7 +264,7 @@ function extractCarouselList(html) {
   return list;
 }
 
-function extractGridListFromText(text, urlPrefix) {
+function extractGridListFromText(text, urlPrefix, typeId) {
   const list = [];
   const seen = new Set();
   const pattern = /\{"id":(\d+),"vodName":"([^"]+)","vodPic":"([^"]+)","vodRemarks":"([^"]*)"/g;
@@ -223,7 +274,7 @@ function extractGridListFromText(text, urlPrefix) {
     if (!vodId || seen.has(vodId)) continue;
     seen.add(vodId);
     list.push({
-      vod_id: vodId,
+      vod_id: encodeVodId(typeId, vodId),
       vod_name: clean(match[2]),
       vod_pic: absUrl(match[3]),
       vod_remarks: clean(match[4]),
@@ -250,7 +301,7 @@ function extractSectionList(html, typeId) {
 
   const sectionText = text.slice(start, nextStart);
   const urlPrefix = `/${typeId}`;
-  return extractGridListFromText(sectionText, urlPrefix);
+  return extractGridListFromText(sectionText, urlPrefix, typeId);
 }
 
 function mergeHomeSections(html) {
@@ -265,10 +316,6 @@ function mergeHomeSections(html) {
     }
   }
   return merged;
-}
-
-function pickTypeFromId(typeId) {
-  return CATEGORY_MAP.find((item) => item.type_id === typeId)?.type_name || "";
 }
 
 function extractInfoTokens(text) {
@@ -291,7 +338,7 @@ function buildDetailResult(html, vodId, typeId) {
   const infoTokens = extractInfoTokens(text);
   const vodYear = infoTokens.find((item) => /^\d{4}$/.test(item)) || "";
   const maybeLang = infoTokens.filter((item) => !/^\d{4}$/.test(item));
-  const typeName = maybeLang[0] || pickTypeFromId(typeId) || "";
+  const typeName = maybeLang[0] || pickCategory(typeId).type_name || "";
   const lang = maybeLang[maybeLang.length - 1] || "";
   const infoLine = [typeName, vodYear, lang].filter(Boolean).join(" · ");
 
@@ -311,7 +358,7 @@ function buildDetailResult(html, vodId, typeId) {
   }
 
   return {
-    vod_id: String(vodId || ""),
+    vod_id: encodeVodId(typeId, vodId),
     vod_name: title,
     vod_pic: poster,
     type_name: typeName,
@@ -322,6 +369,34 @@ function buildDetailResult(html, vodId, typeId) {
     vod_remarks: infoLine,
     vod_play_sources: episodes.length ? [{ name: "正片", episodes }] : [],
   };
+}
+
+async function fetchCategoryApi(typeId, page, filters = {}) {
+  const category = pickCategory(typeId);
+  const qs = new URLSearchParams();
+  qs.set("page", String(page || 1));
+  qs.set("pid", String(category.pid));
+  if (filters.type) qs.set("typeId", String(filters.type));
+  if (filters.lang) qs.set("lang", String(filters.lang));
+  if (filters.area) qs.set("area", String(filters.area));
+  if (filters.year) qs.set("year", String(filters.year));
+  if (filters.order) qs.set("order", String(filters.order));
+  const url = `${API_BASE}/vod?${qs.toString()}`;
+  const data = await fetchJson(url);
+  const vods = Array.isArray(data?.data?.vods) ? data.data.vods : [];
+  const totalVods = Number(data?.data?.totalVods || vods.length || 0);
+  return { url, vods, totalVods };
+}
+
+async function fetchSearchApi(keyword, page) {
+  const qs = new URLSearchParams();
+  qs.set("kw", keyword);
+  qs.set("page", String(page || 1));
+  const url = `${API_BASE}/vod/search?${qs.toString()}`;
+  const data = await fetchJson(url);
+  const vods = Array.isArray(data?.data?.vods) ? data.data.vods : [];
+  const totalVods = Number(data?.data?.totalVods || vods.length || 0);
+  return { url, vods, totalVods };
 }
 
 async function home(params, context) {
@@ -360,17 +435,35 @@ async function home(params, context) {
 
 async function category(params, context) {
   await log("info", "category 开始", { params: params || {}, from: context?.from || "web" });
+  const typeId = String(params.categoryId || params.type_id || params.type || "movie").trim();
+  const page = Math.max(1, parseInt(params.page || 1, 10));
+  const filters = params.filters || {};
   try {
-    const typeId = String(params.categoryId || params.type_id || params.type || "movie").trim();
-    const page = Math.max(1, parseInt(params.page || 1, 10));
-    const subType = String((params.filters && params.filters.type) || params.type || "").trim();
-    const path = subType ? `/video/${typeId}?type=${encodeURIComponent(subType)}` : `/video/${typeId}`;
+    const api = await fetchCategoryApi(typeId, page, filters);
+    const apiList = api.vods.map((item) => mapVodItem(item, typeId));
+    await log("info", "category API 结果", {
+      typeId,
+      page,
+      filters,
+      apiUrl: api.url,
+      listCount: apiList.length,
+      totalVods: api.totalVods,
+      first: apiList[0] || null,
+    });
+    if (apiList.length || Object.values(filters).some(Boolean)) {
+      return {
+        page,
+        pagecount: Math.max(1, Math.ceil((api.totalVods || apiList.length || 0) / 24)),
+        total: api.totalVods,
+        filters: FILTERS[typeId] || [],
+        list: apiList,
+      };
+    }
 
-    const categoryHtml = await fetchText(`${HOST}${path}`);
+    const categoryHtml = await fetchText(`${HOST}/video/${typeId}`);
     await log("info", "category 页面抓取完成", {
       typeId,
       page,
-      path,
       htmlLength: categoryHtml.length,
       rawVodNameCount: (categoryHtml.match(/vodName/g) || []).length,
       rawUrlPrefixCount: (categoryHtml.match(/urlPrefix/g) || []).length,
@@ -378,7 +471,6 @@ async function category(params, context) {
 
     let list = extractSectionList(categoryHtml, typeId);
     await log("info", "category 页面解析结果", { typeId, page, listCount: list.length, first: list[0] || null });
-
     if (!list.length) {
       const homeHtml = await fetchText(`${HOST}/`);
       await log("info", "category 回退首页抓取完成", {
@@ -400,15 +492,16 @@ async function category(params, context) {
     };
   } catch (e) {
     await log("error", "category 失败", { error: e.message, params });
-    return { page: 1, pagecount: 0, total: 0, filters: FILTERS[String(params?.categoryId || params?.type_id || params?.type || "movie").trim()] || [], list: [] };
+    return { page: 1, pagecount: 0, total: 0, filters: FILTERS[typeId] || [], list: [] };
   }
 }
 
 async function detail(params, context) {
   await log("info", "detail 开始", { params: params || {}, from: context?.from || "web" });
   try {
-    const vodId = String(params.videoId || params.vod_id || params.id || "").trim();
-    const typeId = String(params.type_id || params.type || "movie").trim();
+    const decoded = decodeVodId(String(params.videoId || params.vod_id || params.id || ""));
+    const vodId = decoded.vodId || String(params.videoId || params.vod_id || params.id || "").trim();
+    const typeId = decoded.typeId || String(params.type_id || params.type || "movie").trim() || "movie";
     if (!vodId) return { list: [] };
     const url = `${HOST}/video/${typeId}/${vodId}`;
     await log("info", "detail 请求前", { url, vodId, typeId });
@@ -420,7 +513,7 @@ async function detail(params, context) {
       vodName: vod.vod_name,
       remarks: vod.vod_remarks,
       director: vod.vod_director,
-      contentLength: (vod.vod_content || '').length,
+      contentLength: (vod.vod_content || "").length,
       sourceCount: vod.vod_play_sources.length,
       episodeCount: vod.vod_play_sources.reduce((n, s) => n + (s.episodes || []).length, 0),
     });
@@ -438,31 +531,25 @@ async function search(params, context) {
     const page = Math.max(1, parseInt(params.page || 1, 10));
     if (!keyword) return { page, pagecount: 0, total: 0, list: [] };
 
-    const html = await fetchText(`${HOST}/search?wd=${encodeURIComponent(keyword)}`);
-    const rawVodNameCount = (html.match(/vodName/g) || []).length;
-    const idx = html.indexOf(keyword);
-    await log("info", "search 请求后", {
+    const api = await fetchSearchApi(keyword, page);
+    const list = api.vods.map((item) => mapVodItem(item, pidToTypeId(item?.type?.pid || 1)));
+    await log("info", "search API 结果", {
       keyword,
       page,
-      htmlLength: html.length,
-      rawVodNameCount,
-      keywordIndex: idx,
-      keywordSnippet: idx >= 0 ? html.slice(Math.max(0, idx - 80), idx + 220) : "",
+      apiUrl: api.url,
+      listCount: list.length,
+      totalVods: api.totalVods,
+      first: list[0] || null,
     });
-
-    let list = extractSectionList(html, "movie");
-    if (!list.length) {
-      const homeHtml = await fetchText(`${HOST}/`);
-      const merged = mergeHomeSections(homeHtml);
-      list = merged.filter((item) => String(item.vod_name || '').includes(keyword)).slice(0, 24);
-      await log("info", "search 首页兜底结果", { keyword, page, mergedCount: merged.length, listCount: list.length, first: list[0] || null });
-    }
-
-    await log("info", "search 解析结果", { keyword, page, listCount: list.length, first: list[0] || null });
-    return { page, pagecount: page + (list.length >= 12 ? 1 : 0), total: list.length, list };
+    return {
+      page,
+      pagecount: Math.max(1, Math.ceil((api.totalVods || list.length || 0) / 24)),
+      total: api.totalVods,
+      list,
+    };
   } catch (e) {
     await log("error", "search 失败", { error: e.message, params });
-    return { page: 1, pagecount: 0, total: 0, filters: FILTERS[String(params?.categoryId || params?.type_id || params?.type || "movie").trim()] || [], list: [] };
+    return { page: 1, pagecount: 0, total: 0, list: [] };
   }
 }
 
