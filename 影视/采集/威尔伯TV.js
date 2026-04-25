@@ -2,7 +2,7 @@
 // @author 梦
 // @description 刮削：已接入，弹幕：未接入，嗅探：直接返回 play.modujx11.com 直链
 // @dependencies cheerio
-// @version 1.0.7
+// @version 1.0.8
 // @downloadURL https://gh-proxy.org/https://github.com/Silent1566/OmniBox-Spider/raw/refs/heads/openclaw/影视/采集/威尔伯TV.js
 
 const OmniBox = require("omnibox_sdk");
@@ -35,29 +35,29 @@ const HOME_SECTION_MARKERS = {
 
 const COMMON_LANG_FILTER = { key: "lang", name: "按语言", init: "", value: [
   { name: "全部", value: "" },
-  { name: "国语", value: "1" },
-  { name: "粤语", value: "2" },
-  { name: "英语", value: "3" },
-  { name: "韩语", value: "4" },
-  { name: "日语", value: "5" },
-  { name: "西班牙语", value: "6" },
-  { name: "法语", value: "7" },
-  { name: "意大利语", value: "8" },
-  { name: "泰国", value: "9" },
-  { name: "其他", value: "10" },
+  { name: "国语", value: "国语" },
+  { name: "粤语", value: "粤语" },
+  { name: "英语", value: "英语" },
+  { name: "韩语", value: "韩语" },
+  { name: "日语", value: "日语" },
+  { name: "西班牙语", value: "西班牙语" },
+  { name: "法语", value: "法语" },
+  { name: "意大利语", value: "意大利语" },
+  { name: "泰国", value: "泰国" },
+  { name: "其他", value: "其他" },
 ] };
 
 const COMMON_AREA_FILTER = { key: "area", name: "按地区", init: "", value: [
   { name: "全部", value: "" },
-  { name: "大陆", value: "1" },
-  { name: "香港", value: "2" },
-  { name: "台湾", value: "3" },
-  { name: "日本", value: "4" },
-  { name: "韩国", value: "5" },
-  { name: "欧美", value: "6" },
-  { name: "英国", value: "7" },
-  { name: "泰国", value: "8" },
-  { name: "其他", value: "9" },
+  { name: "大陆", value: "大陆" },
+  { name: "香港", value: "香港" },
+  { name: "台湾", value: "台湾" },
+  { name: "日本", value: "日本" },
+  { name: "韩国", value: "韩国" },
+  { name: "欧美", value: "欧美" },
+  { name: "英国", value: "英国" },
+  { name: "泰国", value: "泰国" },
+  { name: "其他", value: "其他" },
 ] };
 
 const COMMON_YEAR_FILTER = { key: "year", name: "按年份", init: "", value: [
